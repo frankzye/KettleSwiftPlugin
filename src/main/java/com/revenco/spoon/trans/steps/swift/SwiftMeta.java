@@ -5,8 +5,16 @@ import org.pentaho.di.core.Const;
 import org.pentaho.di.core.annotations.Step;
 import org.pentaho.di.core.database.DatabaseMeta;
 import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.exception.KettleStepException;
 import org.pentaho.di.core.exception.KettleXMLException;
+import org.pentaho.di.core.row.RowMeta;
+import org.pentaho.di.core.row.RowMetaInterface;
+import org.pentaho.di.core.row.value.ValueMetaString;
+import org.pentaho.di.core.variables.VariableSpace;
 import org.pentaho.di.core.xml.XMLHandler;
+import org.pentaho.di.i18n.BaseMessages;
+import org.pentaho.di.repository.ObjectId;
+import org.pentaho.di.repository.Repository;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.step.*;
@@ -17,6 +25,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Step(
         id = "Swift",
@@ -67,6 +76,24 @@ public class SwiftMeta extends BaseStepMeta implements StepMetaInterface {
     }
 
     @Override
+    public void readRep(Repository rep, IMetaStore metaStore, ObjectId id_step, List<DatabaseMeta> databases) throws KettleException {
+        this.setUser(rep.getStepAttributeString(id_step, "user"));
+        this.setServerUrl(rep.getStepAttributeString(id_step, "server"));
+        this.setFilePath(rep.getStepAttributeString(id_step, "file"));
+        this.setPassword(rep.getStepAttributeString(id_step, "password"));
+        this.setFolder(rep.getStepAttributeString(id_step, "folder"));
+    }
+
+    @Override
+    public void saveRep(Repository rep, IMetaStore metaStore, ObjectId id_transformation, ObjectId id_step) throws KettleException {
+        rep.saveStepAttribute(id_transformation, id_step, "user", this.getUser());
+        rep.saveStepAttribute(id_transformation, id_step, "server", this.getServerUrl());
+        rep.saveStepAttribute(id_transformation, id_step, "file", this.getFilePath());
+        rep.saveStepAttribute(id_transformation, id_step, "password", this.getPassword());
+        rep.saveStepAttribute(id_transformation, id_step, "folder", this.getFolder());
+    }
+
+    @Override
     public StepInterface getStep(StepMeta stepMeta, StepDataInterface stepDataInterface, int i, TransMeta transMeta, Trans trans) {
         return new Swift(stepMeta, stepDataInterface, i, transMeta, trans);
     }
@@ -79,6 +106,14 @@ public class SwiftMeta extends BaseStepMeta implements StepMetaInterface {
 
     public Map<String, String> getFields() {
         return this.fields;
+    }
+
+    @Override
+    public void getFields(RowMetaInterface inputRowMeta, String name, RowMetaInterface[] info, StepMeta nextStep, VariableSpace space, Repository repository, IMetaStore metaStore) throws KettleStepException {
+        inputRowMeta.clear();
+        inputRowMeta.addValueMeta(new ValueMetaString("fileName"));
+        inputRowMeta.addValueMeta(new ValueMetaString("metaKey"));
+        inputRowMeta.addValueMeta(new ValueMetaString("metaValue"));
     }
 
     public void setFields(Map<String, String> fields) {

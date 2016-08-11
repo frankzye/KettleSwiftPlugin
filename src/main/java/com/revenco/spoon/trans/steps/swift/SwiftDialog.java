@@ -225,7 +225,7 @@ public class SwiftDialog extends BaseStepDialog implements StepDialogInterface {
             }
         });
 
-        Control[] connectionControls = new Control[]{serverTab, userTab, pwdTab, folderTab, filePathField};
+        Control[] connectionControls = new Control[]{serverTab, userTab, pwdTab, folderTab,filePathField};
         this.placeControls(this.wServerGroup, connectionControls);
         BaseStepDialog.positionBottomButtons(this.wServerGroup, new Button[]{wTest}, 4, filePathField);
 
@@ -414,10 +414,10 @@ public class SwiftDialog extends BaseStepDialog implements StepDialogInterface {
 
     public void getData(SwiftMeta in) {
         this.userTab.setText(Const.NVL(in.getUser(), ""));
-        this.pwdTab.setText(Const.NVL(in.getPassword(),""));
-        this.serverTab.setText(Const.NVL(in.getServerUrl(),""));
-        this.filePathField.setText(Const.NVL(in.getFilePath(),""));
-        this.folderTab.setText(Const.NVL(in.getFolder(),""));
+        this.pwdTab.setText(Const.NVL(in.getPassword(), ""));
+        this.serverTab.setText(Const.NVL(in.getServerUrl(), ""));
+        this.filePathField.setText(Const.NVL(in.getFilePath(), ""));
+        this.folderTab.setText(Const.NVL(in.getFolder(), ""));
         this.mapToTableView(this.model.getFields(), this.wFields);
         this.wStepname.selectAll();
         this.wStepname.setFocus();

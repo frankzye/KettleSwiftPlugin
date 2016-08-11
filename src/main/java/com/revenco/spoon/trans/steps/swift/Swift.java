@@ -1,5 +1,6 @@
 package com.revenco.spoon.trans.steps.swift;
 
+import com.revenco.spoon.LogManager;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -16,11 +17,15 @@ import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.step.*;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributeView;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileAttributeView;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.regex.Matcher;
 
 /**
@@ -29,11 +34,41 @@ import java.util.regex.Matcher;
 public class Swift extends BaseStep implements StepInterface {
     private SwiftMeta meta;
     private SwiftData data;
+    private LogManager logger;
 
     private static Class<?> PKG = SwiftMeta.class;
 
     public Swift(StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta, Trans trans) {
         super(stepMeta, stepDataInterface, copyNr, transMeta, trans);
+
+        try {
+            logger = new LogManager(Integer.parseInt(trans.getVariable("jobplanid")), Integer.parseInt(trans.getVariable("jobid")));
+        }catch (Exception ex){}
+
+        try {
+            String path = this.getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
+            path = java.net.URLDecoder.decode(path, "UTF-8");
+            int firstIndex = path.lastIndexOf(System.getProperty("path.separator")) + 1;
+            int lastIndex = path.lastIndexOf(File.separator) + 1;
+            path = path.substring(firstIndex, lastIndex);
+            getFileMetas(path+"/db.config");
+        }catch (Exception ex){}
+    }
+
+    private void writeLogs(String stepName, String msg, boolean error) {
+        if (logger != null) {
+            logger.Log(stepName, msg, error);
+        }
+    }
+
+    private void writeLogs(String stepName, Exception ex, boolean error) {
+        if (logger != null) {
+            String msg = ex.getMessage();
+            for (StackTraceElement e : ex.getStackTrace()) {
+                msg += "\r\n" + e;
+            }
+            logger.Log(stepName, msg, error);
+        }
     }
 
     @Override
@@ -64,13 +99,58 @@ public class Swift extends BaseStep implements StepInterface {
             this.meta.getFields(this.data.outputRowMeta, this.getStepname(), (RowMetaInterface[]) null, (StepMeta) null, this, this.repository, this.metaStore);
 
             String filePath = "" + rowData[getFieldIdx(this.data.inputRowMeta, this.environmentSubstitute(this.meta.getFilePath()))];
-            return upload(filePath);
+            String descFilePath = filePath + ".desc";
+            HashMap<String, String> map = getFileMetas(descFilePath);
+
+
+            upload(filePath, map);
+
+
+            try {
+                BasicFileAttributes attributes = Files.getFileAttributeView(new File(filePath).toPath(), BasicFileAttributeView.class).readAttributes();
+                this.putRow(this.data.outputRowMeta,new Object[]{ filePath, "lastmodified", attributes.lastModifiedTime() });
+                this.putRow(this.data.outputRowMeta,new Object[]{ filePath, "contentlength", attributes.size() });
+                for(String key : map.keySet()) {
+                    this.putRow(this.data.outputRowMeta, new Object[]{filePath, key, map.get(key)});
+                }
+            } catch (Exception ex) {
+                writeLogs(this.meta.getName(), "no description file", false);
+            }
+
+            this.setOutputDone();
+            return true;
         }
     }
 
-    private boolean upload(String fileName){
-        if(!createBulket())
+
+    private HashMap<String, String> getFileMetas(String path) {
+        File file = new File(path);
+        HashMap<String, String> map = new HashMap<>();
+
+        try {
+            FileInputStream fs = new FileInputStream(file);
+            InputStreamReader is = new InputStreamReader(fs);
+            BufferedReader br = new BufferedReader(is);
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] keyValues = line.split("\\t");
+                map.put(keyValues[0], keyValues[1]);
+            }
+            is.close();
+            fs.close();
+        } catch (Exception ex) {
+
+        }
+        return map;
+    }
+
+    private boolean upload(String fileName, HashMap<String, String> map){
+        writeLogs(this.meta.getName(), "start upload file"+fileName, false);
+
+        if(!createBulket()) {
+            writeLogs(this.meta.getName(), "create bulket faild", false);
             return false;
+        }
 
         HttpClient httpclient = HttpClientBuilder.create().build();
 
@@ -81,18 +161,23 @@ public class Swift extends BaseStep implements StepInterface {
 
             HttpPut put = new HttpPut(this.meta.getServerUrl()+"/v1/AUTH_"+ this.meta.getUser().split(":")[0]+ "/" + this.meta.getFolder()+"/"+ URLEncoder.encode(file.getName(), "UTF-8"));
             put.addHeader(new BasicHeader("X-Auth-Token", getToken()));
+            for(String key : map.keySet()) {
+                put.addHeader(new BasicHeader("X-Object-Meta-" + key, map.get(key)));
+            }
+
             put.setEntity(entity);
 
             HttpResponse response = httpclient.execute(put);
             if (entity != null) {
+                writeLogs(this.meta.getName(), "end upload file"+fileName, false);
                 return response.getStatusLine().getStatusCode() == 201;
             }
 
         } catch (Exception ex) {
+            writeLogs(this.meta.getName(), ex,  true);
             this.logError(ex.getMessage(), ex);
             ex.printStackTrace();
         }
-
         return false;
     }
 
@@ -110,6 +195,7 @@ public class Swift extends BaseStep implements StepInterface {
             }
 
         } catch (Exception ex) {
+            writeLogs(this.meta.getName(), ex, true);
             this.logError(ex.getMessage(), ex);
             ex.printStackTrace();
         }
@@ -117,19 +203,21 @@ public class Swift extends BaseStep implements StepInterface {
         return false;
     }
 
-    private String getToken(){
+    private String getToken() {
         HttpClient httpclient = HttpClientBuilder.create().build();
-        HttpGet httpgets = new HttpGet(this.meta.getServerUrl()+"/auth/v1.0/");
+        HttpGet httpgets = new HttpGet(this.meta.getServerUrl() + "/auth/v1.0/");
         httpgets.addHeader(new BasicHeader("X-Auth-User", this.meta.getUser()));
         httpgets.addHeader(new BasicHeader("X-Auth-Key", this.meta.getPassword()));
         try {
             HttpResponse response = httpclient.execute(httpgets);
             HttpEntity entity = response.getEntity();
             if (entity != null) {
-                return response.getHeaders("X-Auth-Token")[0].getValue();
+                String token = response.getHeaders("X-Auth-Token")[0].getValue();
+                writeLogs(this.meta.getName(), "get token back:" + token, true);
+                return token;
             }
-
         } catch (Exception ex) {
+            writeLogs(this.meta.getName(), ex, true);
             this.logError(ex.getMessage(), ex);
             ex.printStackTrace();
         }

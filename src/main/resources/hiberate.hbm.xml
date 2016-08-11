@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!DOCTYPE hibernate-mapping PUBLIC
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+
+    <class name="com.revenco.spoon.JobJobLogEntity" table="JOB_JobLog" schema="dbo" catalog="DC">
+        <id name="jobLogId">
+            <column name="JobLogId" sql-type="bigint identity" not-null="true"/>
+            <generator class="identity"></generator>
+        </id>
+        <property name="jobPlanId">
+            <column name="JobPlanId" sql-type="int" not-null="true"/>
+        </property>
+        <property name="jobServerId">
+            <column name="JobServerId" sql-type="int" not-null="true"/>
+        </property>
+        <property name="serverInfo">
+            <column name="ServerInfo" sql-type="varchar" length="200" not-null="true"/>
+        </property>
+        <property name="startTime">
+            <column name="StartTime" sql-type="datetime" not-null="true"/>
+        </property>
+        <property name="endTime">
+            <column name="EndTime" sql-type="datetime"/>
+        </property>
+        <property name="jobStatus">
+            <column name="JobStatus" sql-type="smallint" not-null="true"/>
+        </property>
+        <property name="contentText">
+            <column name="ContentText" sql-type="nvarchar"/>
+        </property>
+    </class>
+    <class name="com.revenco.spoon.JobJobLogDetailEntity" table="JOB_JobLogDetail" schema="dbo" catalog="DC">
+        <id name="jobLogDetailId">
+            <column name="JobLogDetailId" sql-type="int identity" not-null="true"/>
+            <generator class="identity"></generator>
+        </id>
+        <property name="jobPlanId">
+            <column name="JobPlanId" sql-type="int" not-null="true"/>
+        </property>
+        <property name="jobLogId">
+            <column name="JobLogId" sql-type="int" not-null="true"/>
+        </property>
+        <property name="stepName">
+            <column name="StepName" sql-type="nvarchar"/>
+        </property>
+        <property name="message">
+            <column name="Message" sql-type="nvarchar"/>
+        </property>
+        <property name="createdDate">
+            <column name="CreatedDate" sql-type="datetime"/>
+        </property>
+    </class>
+</hibernate-mapping>
